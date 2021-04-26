@@ -1,15 +1,20 @@
 package scala2021.vmylnikov.task03
 
+
+import scala.annotation.tailrec
+
 object Main extends App {
 
   def encodeDirect(chars: List[Char]): List[(Int, Char)] = {
-    chars.foldLeft(List.empty[(Int, Char)]) { (acc, e) =>
-      acc match {
-        case Nil => (1, e) :: Nil
-        case (lastCharCount, lastChar) :: xs if lastChar == e => (lastCharCount + 1, lastChar) :: xs
-        case xs => (1, e) :: xs
-      }
-    }.reverse
+    @tailrec
+    def loop(acc: List[(Int, Char)], list: List[Char]): List[(Int, Char)] = list match {
+      case Nil => acc
+      case _ =>
+        val (leftList, rightList) = list.span(_ == list.head)
+        loop(acc ::: List((leftList.length, leftList.head)), rightList)
+    }
+
+    loop(List.empty, chars)
   }
 
   println(encodeDirect(List('a', 'a', 'a', 'a', 'b', 'c', 'c', 'a', 'a', 'd', 'e', 'e', 'e', 'e')))
