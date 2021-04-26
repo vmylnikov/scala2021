@@ -6,11 +6,13 @@ object Main extends App {
 
   def balanced(chars: List[Char]): Boolean = {
     @tailrec
-    def loop(chars: List[Char], openCount: Int): Boolean = {
-      if (chars.isEmpty) openCount == 0
-      else if (chars.head == '(') loop(chars.tail, openCount + 1)
-      else if (chars.head == ')') openCount > 0 && loop(chars.tail, openCount - 1)
-      else loop(chars.tail, openCount)
+    def loop(chars: List[Char], openCount: Int): Boolean = chars match {
+      case Nil => openCount == 0
+      case _ => chars.head match {
+        case '(' => loop(chars.tail, openCount + 1)
+        case ')' => openCount > 0 && loop(chars.tail, openCount - 1)
+        case _ => loop(chars.tail, openCount)
+      }
     }
 
     loop(chars, 0)
