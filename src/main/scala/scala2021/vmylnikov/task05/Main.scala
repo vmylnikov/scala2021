@@ -39,29 +39,13 @@ object Main {
 
   val NotFound = "Not Found"
 
-  // helper functions
-  def findDepartmentByEmployee(employee: Option[Employee]): Option[Department] = employee match {
-    case Some(employee) => departments.find(_.id == employee.departmentId)
-    case None => None
-  }
-
-  def findManagerByDepartment(department: Option[Department]): Option[Manager] = department match {
-    case Some(department) => managers.find(_.department == department.name)
-    case None => None
-  }
-
-  def findEmployeeByManager(manager: Option[Manager]): Option[Employee] = manager match {
-    case Some(manager) => employees.find(_.id == manager.employeeId)
-    case None => None
-  }
-
   // Найти имя менеджера департамента, в котором работает сотрудник по имени сотрудника
   def findManagerName(employee: String): Option[String] = {
     for {
       employeeObj <- employees.find(_.name == employee)
-      department <- findDepartmentByEmployee(Option(employeeObj))
-      manager <- findManagerByDepartment(Option(department))
-      managerEmployee <- findEmployeeByManager(Option(manager))
+      department <- departments.find(_.id == employeeObj.departmentId)
+      manager <- managers.find(_.department == department.name)
+      managerEmployee <- employees.find(_.id == manager.employeeId)
     } yield managerEmployee.name
   }
 
@@ -70,11 +54,11 @@ object Main {
     for {
       employeeObj <- employees.find(_.name == employee)
         .toRight(s"Couldn't find employee by name $employee")
-      department <- findDepartmentByEmployee(Option(employeeObj))
+      department <- departments.find(_.id == employeeObj.departmentId)
         .toRight(s"Couldn't find department by id ${employeeObj.departmentId}")
-      manager <- findManagerByDepartment(Option(department))
+      manager <- managers.find(_.department == department.name)
         .toRight(s"Couldn't find manager by department name ${department.name}")
-      managerEmployee <- findEmployeeByManager(Option(manager))
+      managerEmployee <- employees.find(_.id == manager.employeeId)
         .toRight(s"Couldn't find employee by id ${manager.employeeId}")
     } yield managerEmployee.name
   }
@@ -86,12 +70,13 @@ object Main {
 
   // вывести список всех сотрудников, вместе с именем департамента и именем менеджера, если департамента или менеджера нет то использовать константу "Not Found"
   def findEmployeeManagers: List[Info] = {
-    employees
-      .map(e => (e.name, findDepartmentByEmployee(Option(e))))
-      .map { case (e, d) => (e, d, findManagerByDepartment(d)) }
-      .map { case (e, d, m) =>
-        Info(e, d.map(_.name).getOrElse(NotFound), findEmployeeByManager(m).map(_.name).getOrElse(NotFound))
-      }
+    def createInfo(e: Employee) = for {
+      d <- departments.find(_.id == e.departmentId).toRight(Info(e.name, NotFound, NotFound))
+      m <- managers.find(_.department == d.name).toRight(Info(e.name, d.name, NotFound))
+      me <- employees.find(_.id == m.employeeId).toRight(Info(e.name, d.name, NotFound))
+    } yield Info(e.name, d.name, me.name)
+
+    employees.map(e => createInfo(e).merge)
   }
 
 }
