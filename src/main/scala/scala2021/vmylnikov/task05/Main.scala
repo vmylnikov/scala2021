@@ -1,7 +1,8 @@
 package scala2021.vmylnikov.task05
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 object Main {
 
@@ -66,6 +67,35 @@ object Main {
   // Найти имя менеджера по имени сотрудника, в случае ошибки в данных - указать что именно не так и сделать все это асинхронно
   def findManagerNameOrErrorAsync(employee: String): Future[Either[String, String]] = Future {
     findManagerNameOrError(employee)
+  }
+
+  // Найти имя менеджера по имени сотрудника, в случае ошибки в данных - указать что именно не так и сделать каждую операцию асинхронной(операция = вызов репозитория)
+  def findManagerNameOrErrorAsyncOperations(employee: String): Future[Either[String, String]] = Future {
+    val result = for {
+      employeeEither <- Future {
+        employees.find(_.name == employee).toRight(s"Couldn't find employee by name $employee")
+      }
+      departmentEither <- Future {
+        employeeEither.map { employeeObj =>
+          departments.find(_.id == employeeObj.departmentId)
+            .toRight(s"Couldn't find department by id ${employeeObj.departmentId}")
+        }.flatten
+      }
+      managerEither <- Future {
+        departmentEither.map { department =>
+          managers.find(_.department == department.name)
+            .toRight(s"Couldn't find manager by department name ${department.name}")
+        }.flatten
+      }
+      managerEmployeeNameEither <- Future {
+        managerEither.map { manager =>
+          employees.find(_.id == manager.employeeId).map(_.name)
+            .toRight(s"Couldn't find employee by id ${manager.employeeId}")
+        }.flatten
+      }
+    } yield managerEmployeeNameEither
+
+    Await.result(result, Duration("10 seconds"))
   }
 
   // вывести список всех сотрудников, вместе с именем департамента и именем менеджера, если департамента или менеджера нет то использовать константу "Not Found"

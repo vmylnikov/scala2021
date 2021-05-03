@@ -3,7 +3,7 @@ package scala2021.vmylnikov.task05
 import org.scalatest.funsuite.AsyncFunSuite
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
-import scala2021.vmylnikov.task05.Main.findManagerNameOrErrorAsync
+import scala2021.vmylnikov.task05.Main.{findManagerNameOrErrorAsync, findManagerNameOrErrorAsyncOperations}
 
 class MainAsyncSuit extends AsyncFunSuite with TableDrivenPropertyChecks with Matchers {
 
@@ -23,6 +23,16 @@ class MainAsyncSuit extends AsyncFunSuite with TableDrivenPropertyChecks with Ma
     forAll(tblFindManagerNameOrErrorData) {
       (employee, expected) => {
         findManagerNameOrErrorAsync(employee).map {
+          _ should be(expected)
+        }
+      }
+    }
+  }
+
+  test("check findManagerNameOrErrorAsyncOperations returns correct result (table)") {
+    forAll(tblFindManagerNameOrErrorData) {
+      (employee, expected) => {
+        findManagerNameOrErrorAsyncOperations(employee).map {
           _ should be(expected)
         }
       }
