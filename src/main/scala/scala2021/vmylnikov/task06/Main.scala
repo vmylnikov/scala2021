@@ -13,105 +13,117 @@ object Main extends App {
     val Male, Female = Value
   }
 
-  case class Person(name: String, age: Int, email: String, sex: Sex, height: Double)
+  case class UserForm(name: String, age: Int, email: String, sex: Sex, height: Double)
 
-  def validateName(name: String): Either[String, Unit] = {
-    def isEmpty(x: String) = x == null || x.isEmpty
+  case class User(name: String, age: Int, email: String, sex: Sex, height: Double)
 
-    def containsOnlyLatin(s: String): Boolean = s.toList.forall(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
-
-    if (isEmpty(name) || !containsOnlyLatin(name))
+  def validateName(name: String): Either[String, String] = {
+    if (name == null || name.isEmpty || !"[a-zA-Z]+".r.matches(name))
       Left("Name must be non-empty and contain only latin letters")
     else
-      Right()
+      Right(name)
   }
 
-  def validateAge(age: Int): Either[String, Unit] = {
-    if (age > 0 && age < 100) Right() else Left("Age must be > 0 and < 100")
+  def validateAge(age: Int): Either[String, Int] = {
+    if (age > 0 && age < 100) Right(age) else Left("Age must be > 0 and < 100")
   }
 
   val emailRegex = """^[a-zA-Z0-9\.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$""".r
 
-  def validateEmail(email: String): Either[String, Unit] = email match {
-    case null => Right()
-    case e if e.isEmpty => Right()
-    case e if emailRegex.findFirstMatchIn(e).isDefined => Right()
+  def validateEmail(email: String): Either[String, String] = email match {
+    case null => Right(email)
+    case e if e.isEmpty => Right(e)
+    case e if emailRegex.findFirstMatchIn(e).isDefined => Right(e)
     case _ => Left("Invalid email")
   }
 
-  def validateHeight(height: Double, sex: Sex): Either[String, Unit] = sex match {
+  def validateHeight(height: Double, sex: Sex): Either[String, Double] = sex match {
     case Sex.Male if !(height > 100) => Left("Height must be > 100")
-    case _ => Right()
+    case _ => Right(height)
   }
 
   // Выдавать только первую ошибку
-  def validateFailFast(person: Person): List[String] = {
-    val result = for {
-      _ <- validateName(person.name)
-      _ <- validateAge(person.age)
-      _ <- validateEmail(person.email)
-      _ <- validateHeight(person.height, person.sex)
-    } yield ()
-
-    result match {
-      case Left(error) => List(error)
-      case _ => Nil
-    }
+  def validateFailFast(userForm: UserForm): Either[String, User] = {
+    for {
+      name <- validateName(userForm.name)
+      age <- validateAge(userForm.age)
+      email <- validateEmail(userForm.email)
+      height <- validateHeight(userForm.height, userForm.sex)
+    } yield User(name, age, email, userForm.sex, height)
   }
 
   // Выводить все возможные ошибки списком
-  def validateFailSlow(person: Person): List[String] = {
-    val (left, _) = List(
-      validateName(person.name),
-      validateAge(person.age),
-      validateEmail(person.email),
-      validateHeight(person.height, person.sex)
-    ).partition(_.isLeft)
+  def validateFailSlow(userForm: UserForm): Either[List[String], User] = {
+    val results = List(validateName(userForm.name),
+      validateAge(userForm.age),
+      validateEmail(userForm.email),
+      validateHeight(userForm.height, userForm.sex))
 
-    left.collect { case Left(error) => error }
+    results.partitionMap(identity) match {
+      case (Nil, List(name: String, age: Int, email: String, height: Double)) =>
+        Right(User(name, age, email, userForm.sex, height))
+      case (lefts, _) => Left(lefts)
+    }
   }
 
   // Выводить все возможные ошибки, и проводить валидацию каждого поля параллельно(in parallel)
-  def validateParallel(person: Person): List[String] = {
-    val result = for {
-      r1 <- Future(validateName(person.name))
-      r2 <- Future(validateAge(person.age))
-      r3 <- Future(validateEmail(person.email))
-      r4 <- Future(validateHeight(person.height, person.sex))
-    } yield List(r1, r2, r3, r4)
+  def validateParallel(userForm: UserForm): Either[List[String], User] = {
+    val nameFuture = Future(validateName(userForm.name))
+    val ageFuture = Future(validateAge(userForm.age))
+    val emailFuture = Future(validateEmail(userForm.email))
+    val heightFuture = Future(validateHeight(userForm.height, userForm.sex))
 
-    val (left, _) = Await.result(result, Duration("10 seconds")).partition(_.isLeft)
-    left.collect { case Left(error) => error }
+    val result = for {
+      nameResult <- nameFuture
+      ageResult <- ageFuture
+      emailResult <- emailFuture
+      heightResult <- heightFuture
+    } yield List(nameResult, ageResult, emailResult, heightResult)
+
+    val results = Await.result(result, Duration("10 seconds"))
+    results.partitionMap(identity) match {
+      case (Nil, List(name: String, age: Int, email: String, height: Double)) =>
+        Right(User(name, age, email, userForm.sex, height))
+      case (lefts, _) => Left(lefts)
+    }
   }
 
-  val personList = List(
-    Person("", 110, "invalid.email", Sex.Male, 98),
-    Person(null, -1, "invalid email", Sex.Male, 99),
-    Person("Игорь", -100, "invalid email", Sex.Male, 172),
-    Person("John", 120, "john@example.com", Sex.Male, 98),
-    Person("Mark", 42, "mark@example.com", Sex.Male, 99),
-    Person("Igor", 30, "igor@@example.com", Sex.Male, 180),
-    Person("Samuel", 35, "samuel@example.com", Sex.Male, 175),
-    Person("Jane", 125, "jane@@example.com", Sex.Female, 160),
-    Person("Megan", 10, "megan@example.com", Sex.Female, 95)
+  val testUserFormList = List(
+    UserForm("", 110, "invalid.email", Sex.Male, 98),
+    UserForm(null, -1, "invalid email", Sex.Male, 99),
+    UserForm("Игорь", -100, "invalid email", Sex.Male, 172),
+    UserForm("John", 120, "john@example.com", Sex.Male, 98),
+    UserForm("Mark", 42, "mark@example.com", Sex.Male, 99),
+    UserForm("Igor", 30, "igor@@example.com", Sex.Male, 180),
+    UserForm("Samuel", 35, "samuel@example.com", Sex.Male, 175),
+    UserForm("Jane", 125, "jane@@example.com", Sex.Female, 160),
+    UserForm("Megan", 10, "megan@example.com", Sex.Female, 95)
   )
 
-  personList.foreach { person =>
-    println(s"Validating fail-fast $person")
-    validateFailFast(person).foreach(println)
+  testUserFormList.foreach { userForm =>
+    println(s"Validating fail-fast $userForm")
+    validateFailFast(userForm) match {
+      case Left(error) => println(error)
+      case _ =>
+    }
   }
   println()
 
-  personList.foreach { person =>
-    println(s"Validating fail-slow $person")
-    validateFailSlow(person).foreach(println)
+  testUserFormList.foreach { userForm =>
+    println(s"Validating fail-slow $userForm")
+    validateFailSlow(userForm) match {
+      case Left(errors) => errors.foreach(println)
+      case _ =>
+    }
   }
   println()
 
-  personList.foreach { person =>
-    println(s"Validating parallel $person")
-    validateParallel(person).foreach(println)
+  testUserFormList.foreach { userForm =>
+    println(s"Validating parallel $userForm")
+    validateParallel(userForm) match {
+      case Left(errors) => errors.foreach(println)
+      case _ =>
+    }
   }
-  println()
 
 }
